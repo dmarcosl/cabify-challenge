@@ -4,13 +4,15 @@ import shelve
 import string
 
 from flask import jsonify, Blueprint, request
+from flask_cors import cross_origin
 
-from model import Product, Discount
+from models import Product, Discount
 
 shop_blueprint = Blueprint('shop', __name__)
 
 
 @shop_blueprint.route('/products', methods=['GET'])
+@cross_origin()
 def load_all_products():
     """ Read the products csv and returns all the products
 
@@ -23,17 +25,18 @@ def load_all_products():
 
 
 @shop_blueprint.route('/create-basket', methods=['POST'])
+@cross_origin()
 def create_basket():
     """ Create a basket
 
     :return: (str) Id of the new basket
     """
 
-    with shelve.open("basket.db") as db:
+    with shelve.open("basket", writeback=True) as db:
         # Generate a random string as id, insert it in the database and return it
         basket_id = _random_string()
         db[basket_id] = dict()
-        return {'basket_id': basket_id}, 200
+        return jsonify({'basket_id': basket_id}), 200
 
 
 def _random_string():
@@ -46,6 +49,7 @@ def _random_string():
 
 
 @shop_blueprint.route('/<path:basket_id>/update-product', methods=['PUT'])
+@cross_origin()
 def add_product(basket_id):
     """ Add or remove a product to the selected basket\n
     Request params:\n
@@ -57,32 +61,32 @@ def add_product(basket_id):
     """
 
     # Get the product code from the params
-    product_code = request.args.get('product_code')
-    quantity = request.args.get('quantity')
+    product_code = request.args.get('product_code', type=str)
+    quantity = request.args.get('quantity', type=int)
 
     # Check the validity of the parameters
     if not product_code or not quantity:
-        return {'msg': 'Empty parameters.'}, 400
+        return jsonify({'msg': 'Empty parameters.'}), 400
     if not _check_product(product_code):
-        return {'msg': 'Product code invalid.'}, 400
-    if type(quantity) is not int:
-        return {'msg': 'Invalid quantity.'}, 400
+        return jsonify({'msg': 'Product code invalid.'}), 400
 
-    with shelve.open("basket.db") as db:
+    with shelve.open("basket", writeback=True) as db:
 
         if db.get(basket_id) is None:
-            return {'msg': 'Basked id invalid.'}, 400
+            return jsonify({'msg': 'Basket id invalid.'}), 400
 
         # Get the current number of units of the product and sum the new quantity
         product_count = db.get(basket_id).get(product_code, 0) + quantity
 
         # If the final quantity is 0 or less, remove the item, if not, update the quantity
         if product_count <= 0:
-            db.get(basket_id).pop(product_count)
+            if db.get(basket_id).get(product_code) is None:
+                return jsonify({'msg': 'Product not in the basket.'}), 400
+            db.get(basket_id).pop(product_code)
         else:
             db.get(basket_id)[product_code] = product_count
 
-        return db.get(basket_id), 200
+        return jsonify(db.get(basket_id)), 200
 
 
 def _check_product(product_code):
@@ -101,6 +105,7 @@ def _check_product(product_code):
 
 
 @shop_blueprint.route('/<path:basket_id>/checkout', methods=['GET'])
+@cross_origin()
 def checkout(basket_id):
     """ Calculate the final price of the items of the bag applying the discounts
 
@@ -108,10 +113,10 @@ def checkout(basket_id):
     :return: (float) Price of the products with discounts
     """
 
-    with shelve.open("basket.db") as db:
+    with shelve.open("basket") as db:
 
         if db.get(basket_id) is None:
-            return {'msg': 'Basked id invalid.'}, 400
+            return jsonify({'msg': 'Basked id invalid.'}), 400
 
         product_dict = {**db.get(basket_id)}
 
@@ -145,7 +150,7 @@ def checkout(basket_id):
 
         final_price += product_price
 
-    return {'price': final_price}, 200
+    return jsonify({'price': final_price}), 200
 
 
 def _load_product(code):
@@ -176,16 +181,17 @@ def _load_discounts_by_product(product_code):
 
 
 @shop_blueprint.route('/<path:basket_id>', methods=['DELETE'])
+@cross_origin()
 def remove_basket(basket_id):
     """ Remove the basket
 
     :param basket_id: (str) Id of the basket
     """
 
-    with shelve.open("basket.db") as db:
+    with shelve.open("basket", writeback=True) as db:
         if db.get(basket_id) is None:
-            return {'msg': 'Basked id invalid.'}, 400
+            return jsonify({'msg': 'Basked id invalid.'}), 400
 
         db.pop(basket_id)
 
-    return {}, 200
+    return '{}', 200
