@@ -16,7 +16,7 @@ shop_blueprint = Blueprint('shop', __name__)
 def load_all_products():
     """ Read the products csv and returns all the products
 
-    :return: List of Product entities with the values of the products
+    :return: (list) List of Product entities with the values of the products
     """
 
     with open('./products.csv') as products:

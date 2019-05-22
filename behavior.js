@@ -144,7 +144,6 @@ function addProduct(code, units) {
             const ul = document.querySelectorAll('div.basket ul')[0];
             ul.innerHTML = "";
 
-            // jQuery.each(obj, function(i, val) {
             for (var prop in jsonObj) {
                 const li = document.createElement("li");
                 li.appendChild(document.createTextNode(prop + ' (' + jsonObj[prop] + ')'));
